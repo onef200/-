@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🍇❤🍓</title>
+    <style>
+        /* --- 基础环境 --- */
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #ffffff;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            perspective: 1200px;
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; /* 更简约的字体 */
+            user-select: none;
+        }
+
+        /* --- 舞台与容器 --- */
+        #stage {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: grab;
+            transform-style: preserve-3d;
+        }
+        #stage:active { cursor: grabbing; }
+
+        /* --- 背景大数字 --- */
+        #day-counter {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) translateZ(-200px);
+            font-size: 30vw; 
+            font-weight: 900;
+            color: rgba(0, 0, 0, 0.06);
+            z-index: -1; 
+            pointer-events: none;
+            font-family: 'Arial Black', sans-serif;
+            white-space: nowrap;
+        }
+
+        /* --- 需求新增：底部日期文字 --- */
+        #date-footer {
+            position: absolute;
+            bottom: 50px; /* 距离底部的位置 */
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 16px;
+            color: #888; /* 灰色，不抢眼 */
+            letter-spacing: 2px; /* 增加字间距，更显高级 */
+            z-index: 10;
+            pointer-events: none; /* 允许鼠标穿透点击后面的物体 */
+            font-weight: 300;
+        }
+
+        #gallery {
+            position: relative;
+            width: 0;
+            height: 0;
+            transform-style: preserve-3d;
+        }
+
+        /* --- 照片基础样式 --- */
+        .photo-card {
+            position: absolute;
+            top: 0;
+            left: 0;
+            object-fit: cover;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.6s ease, box-shadow 0.6s ease; 
+            transform-origin: center center;
+            will-change: transform, opacity;
+            cursor: pointer;
+        }
+
+        /* 尺寸定义 */
+        .size-small { width: 60px; height: 60px; margin: -30px; }
+        .size-medium { width: 80px; height: 80px; margin: -40px; }
+        .size-large { width: 100px; height: 100px; margin: -50px; }
+
+        /* --- 交互样式 --- */
+        .photo-card.active {
+            box-shadow: 0 30px 60px rgba(0,0,0,0.3) !important;
+            outline: 10px solid #fff; /* 加宽白边，像拍立得 */
+            opacity: 1 !important; 
+        }
+
+        #gallery.has-active .photo-card:not(.active) {
+            opacity: 0.1 !important;
+            filter: grayscale(100%) blur(3px); /* 背景彻底黑白且模糊 */
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="stage">
+        <div id="day-counter">68</div>
+        
+        <div id="gallery"></div>
+        
+        <div id="date-footer">2025.12.8 - <span id="current-date-text"></span></div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 🟢 【请在这里修改图片链接】 🟢
+        // ==========================================
+        const imageList = [
+             './images/01.jpg',
+            './images/02.jpg',
+            './images/03.jpg',
+            './images/04.jpg',
+            './images/05.jpg',
+            './images/06.jpg',
+            './images/07.jpg',
+            './images/08.jpg',
+            './images/09.jpg',
+            './images/10.jpg',
+            './images/11.jpg',
+            './images/12.jpg',
+            './images/13.jpg',
+            './images/14.jpg',
+            './images/15.jpg', 
+            './images/16.jpg',
+            './images/17.jpg',
+            './images/18.jpg',
+        ];
+
+        // ==========================================
+        // 配置参数
+        // ==========================================
+        const radius = 250;         
+        const baseSpeed = 0.12;     
+        const hoverScale = 3;     
+
+        // ==========================================
+        // 1. 日期与计数器逻辑
+        // ==========================================
+        function initDates() {
+            // --- 更新背景计数器 (天数) ---
+            const counterElement = document.getElementById('day-counter');
+            const startNumber = 68;
+            const startDateStr = "2026-02-13"; // 用于计算累加天数的基准日
+            
+            const startDate = new Date(startDateStr);
+            const today = new Date();
+            startDate.setHours(0,0,0,0);
+            today.setHours(0,0,0,0);
+            
+            const diffTime = today - startDate;
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            const daysPassed = Math.max(0, diffDays);
+            counterElement.textContent = startNumber + daysPassed;
+
+            // --- 更新底部日期文字 ---
+            const dateTextElement = document.getElementById('current-date-text');
+            const year = today.getFullYear();
+            const month = today.getMonth() + 1; // 月份是从0开始的，所以要+1
+            const day = today.getDate();
+            
+            // 格式化为 202x.x.x 的形式
+            dateTextElement.textContent = `${year}.${month}.${day}`;
+        }
+
+        // ==========================================
+        // 2. 核心 3D 逻辑 (保持不变)
+        // ==========================================
+        const gallery = document.getElementById('gallery');
+        const stage = document.getElementById('stage');
+        
+        let autoRotate = true;
+        let rotationX = 0; let rotationY = 0;
+        let startX = 0; let startY = 0;
+        let isDragging = false;
+        let activePhoto = null;
+
+        function initPhotos() {
+            for (let i = 0; i < imageList.length; i++) {
+                const img = document.createElement('img');
+                img.src = imageList[i];
+                img.className = 'photo-card';
+
+                const sizeRoll = Math.random();
+                if (sizeRoll < 0.3) img.classList.add('size-small');
+                else if (sizeRoll < 0.65) img.classList.add('size-medium');
+                else img.classList.add('size-large');
+
+                const phi = Math.acos(-1 + (2 * i) / imageList.length);
+                const theta = Math.sqrt(imageList.length * Math.PI) * phi;
+                img.dataset.ox = radius * Math.cos(theta) * Math.sin(phi);
+                img.dataset.oy = radius * Math.sin(theta) * Math.sin(phi);
+                img.dataset.oz = radius * Math.cos(phi);
+
+                img.addEventListener('mouseenter', function() {
+                    autoRotate = false;
+                    activePhoto = this;
+                    this.classList.add('active');
+                    gallery.classList.add('has-active');
+                    updateTransform(this);
+                });
+
+                img.addEventListener('mouseleave', function() {
+                    if(!isDragging) autoRotate = true;
+                    activePhoto = null;
+                    this.classList.remove('active');
+                    gallery.classList.remove('has-active');
+                    updateTransform(this);
+                });
+
+                gallery.appendChild(img);
+            }
+            document.querySelectorAll('.photo-card').forEach(p => updateTransform(p));
+        }
+
+        function updateTransform(element) {
+            const ox = parseFloat(element.dataset.ox);
+            const oy = parseFloat(element.dataset.oy);
+            const oz = parseFloat(element.dataset.oz);
+
+            let y1 = oy * Math.cos(rotationX * Math.PI / 180) - oz * Math.sin(rotationX * Math.PI / 180);
+            let z1 = oz * Math.cos(rotationX * Math.PI / 180) + oy * Math.sin(rotationX * Math.PI / 180);
+            let rx = ox * Math.cos(rotationY * Math.PI / 180) - z1 * Math.sin(rotationY * Math.PI / 180);
+            let ry = y1;
+            let rz = z1 * Math.cos(rotationY * Math.PI / 180) + ox * Math.sin(rotationY * Math.PI / 180);
+            
+            let targetX = rx; let targetY = ry; let targetZ = rz;
+            let currentScale = (radius + rz) / (2 * radius) + 0.5; 
+            let currentZIndex = Math.floor(rz);
+            let currentOpacity = (rz + radius) / (2 * radius) + 0.1;
+
+            if (element === activePhoto) {
+                targetX = 0; targetY = 0; targetZ = radius * 0.7; // 稍微拉得更近一点
+                currentScale = hoverScale; 
+                currentZIndex = 10000;
+                currentOpacity = 1;
+            } 
+            
+            element.style.transform = `translate3d(${targetX}px, ${targetY}px, ${targetZ}px) scale(${currentScale})`;
+            
+            if (element !== activePhoto) element.style.zIndex = currentZIndex;
+            if (!gallery.classList.contains('has-active')) element.style.opacity = currentOpacity;
+        }
+
+        function animate() {
+            if (autoRotate && !isDragging && !activePhoto) {
+                rotationY += baseSpeed; 
+            }
+            document.querySelectorAll('.photo-card:not(.active)').forEach(photo => {
+                updateTransform(photo);
+            });
+            requestAnimationFrame(animate);
+        }
+
+        stage.addEventListener('mousedown', (e) => {
+            // 防止点到文字或背景开始拖动
+            if(activePhoto || e.target.id === 'day-counter' || e.target.id === 'date-footer') return; 
+            isDragging = true; autoRotate = false;
+            startX = e.clientX; startY = e.clientY;
+        });
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const deltaX = e.clientX - startX;
+            const deltaY = e.clientY - startY;
+            rotationY += deltaX * 0.1; rotationX -= deltaY * 0.1;
+            startX = e.clientX; startY = e.clientY;
+        });
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+            if(!activePhoto) autoRotate = true;
+        });
+
+        // 启动
+        initDates();
+        initPhotos();
+        animate();
+
+    </script>
+</body>
+</html>
